@@ -1,0 +1,1404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IoT Predictive Maintenance — CNN-BiLSTM Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=IBM+Plex+Mono:wght@300;400;500&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
+
+  :root {
+    --bg: #060c14;
+    --bg2: #0a1628;
+    --bg3: #0f1f38;
+    --panel: rgba(10,22,44,0.85);
+    --border: rgba(0,200,255,0.15);
+    --border-bright: rgba(0,200,255,0.4);
+    --cyan: #00c8ff;
+    --cyan2: #00e5ff;
+    --green: #00ff9d;
+    --orange: #ff9500;
+    --red: #ff3b5c;
+    --yellow: #ffe234;
+    --text: #c8e0f4;
+    --text-dim: #5a7a9a;
+    --text-bright: #e8f4ff;
+    --glow: 0 0 20px rgba(0,200,255,0.3);
+    --glow-green: 0 0 20px rgba(0,255,157,0.3);
+    --glow-red: 0 0 20px rgba(255,59,92,0.4);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'IBM Plex Sans', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 80% 50% at 50% -20%, rgba(0,100,200,0.12) 0%, transparent 70%),
+      radial-gradient(ellipse 50% 80% at -10% 60%, rgba(0,200,255,0.06) 0%, transparent 60%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* HEADER */
+  header {
+    position: sticky; top: 0; z-index: 100;
+    background: rgba(6,12,20,0.92);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    padding: 0 2rem;
+    display: flex; align-items: center; justify-content: space-between;
+    height: 60px;
+  }
+  .logo {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 1.2rem; font-weight: 700;
+    color: var(--cyan2);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+  .logo span { color: var(--text-dim); font-weight: 400; }
+  .header-status {
+    display: flex; align-items: center; gap: 1.5rem;
+    font-family: 'IBM Plex Mono', monospace; font-size: 0.72rem;
+  }
+  .live-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 10px var(--green);
+    animation: pulse 1.5s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.5;transform:scale(0.8)} }
+  .header-time { color: var(--cyan); font-size: 0.75rem; }
+  .header-info { color: var(--text-dim); font-size: 0.7rem; }
+
+  /* NAV TABS */
+  .nav-tabs {
+    display: flex; gap: 0; border-bottom: 1px solid var(--border);
+    background: var(--bg2); padding: 0 2rem;
+    overflow-x: auto;
+  }
+  .nav-tab {
+    padding: 0.75rem 1.5rem;
+    font-family: 'Rajdhani', sans-serif; font-size: 0.85rem; font-weight: 600;
+    letter-spacing: 1.5px; text-transform: uppercase;
+    cursor: pointer; border: none; background: none;
+    color: var(--text-dim); border-bottom: 2px solid transparent;
+    transition: all 0.2s; white-space: nowrap;
+  }
+  .nav-tab:hover { color: var(--text); }
+  .nav-tab.active { color: var(--cyan); border-bottom-color: var(--cyan); }
+
+  /* MAIN */
+  main { padding: 1.5rem 2rem; position: relative; z-index: 1; max-width: 1600px; margin: 0 auto; }
+
+  /* PAGE SECTIONS */
+  .page { display: none; }
+  .page.active { display: block; }
+
+  /* KPI ROW */
+  .kpi-row {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 1rem; margin-bottom: 1.5rem;
+  }
+  .kpi-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem 1.2rem;
+    position: relative; overflow: hidden;
+    transition: border-color 0.3s;
+  }
+  .kpi-card:hover { border-color: var(--border-bright); }
+  .kpi-card::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+    opacity: 0.6;
+  }
+  .kpi-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.62rem; color: var(--text-dim);
+    text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.4rem;
+  }
+  .kpi-value {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 2rem; font-weight: 700; line-height: 1;
+    color: var(--text-bright);
+  }
+  .kpi-value.good { color: var(--green); }
+  .kpi-value.warn { color: var(--orange); }
+  .kpi-value.danger { color: var(--red); }
+  .kpi-unit { font-size: 0.85rem; font-weight: 400; color: var(--text-dim); margin-left: 3px; }
+  .kpi-sub {
+    font-family: 'IBM Plex Mono', monospace; font-size: 0.62rem;
+    color: var(--text-dim); margin-top: 0.3rem;
+  }
+
+  /* GRID LAYOUTS */
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; margin-bottom: 1rem; }
+  .grid-2-1 { display: grid; grid-template-columns: 2fr 1fr; gap: 1rem; margin-bottom: 1rem; }
+  .grid-1-2 { display: grid; grid-template-columns: 1fr 2fr; gap: 1rem; margin-bottom: 1rem; }
+
+  /* CHART PANEL */
+  .chart-panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.2rem;
+    position: relative;
+  }
+  .chart-panel.full { grid-column: 1 / -1; }
+  .panel-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 1rem;
+  }
+  .panel-title {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 0.85rem; font-weight: 600;
+    letter-spacing: 2px; text-transform: uppercase;
+    color: var(--cyan);
+  }
+  .panel-badge {
+    font-family: 'IBM Plex Mono', monospace; font-size: 0.62rem;
+    background: rgba(0,200,255,0.1); border: 1px solid var(--border);
+    color: var(--cyan); padding: 2px 8px; border-radius: 3px;
+  }
+  .chart-wrap { position: relative; }
+
+  /* ALERT BANNER */
+  .alert-banner {
+    border-radius: 8px; padding: 0.75rem 1.2rem;
+    display: flex; align-items: center; gap: 0.8rem;
+    margin-bottom: 1rem;
+    font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem;
+    animation: fadeIn 0.5s ease;
+  }
+  @keyframes fadeIn { from{opacity:0;transform:translateY(-8px)} to{opacity:1;transform:none} }
+  .alert-banner.danger {
+    background: rgba(255,59,92,0.1); border: 1px solid rgba(255,59,92,0.4);
+    color: var(--red);
+  }
+  .alert-banner.warning {
+    background: rgba(255,149,0,0.1); border: 1px solid rgba(255,149,0,0.4);
+    color: var(--orange);
+  }
+  .alert-banner.ok {
+    background: rgba(0,255,157,0.08); border: 1px solid rgba(0,255,157,0.3);
+    color: var(--green);
+  }
+  .alert-icon { font-size: 1.2rem; }
+
+  /* RUL GAUGE */
+  .rul-gauge-wrap { text-align: center; padding: 0.5rem 0; }
+  .rul-gauge-label {
+    font-family: 'IBM Plex Mono', monospace; font-size: 0.62rem;
+    color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px;
+    margin-bottom: 0.3rem;
+  }
+  .rul-gauge-value {
+    font-family: 'Rajdhani', sans-serif; font-size: 3.5rem; font-weight: 700;
+    line-height: 1; margin-bottom: 0.2rem;
+  }
+  .rul-gauge-bar-wrap {
+    height: 8px; background: rgba(255,255,255,0.05);
+    border-radius: 4px; overflow: hidden; margin: 0.5rem 0;
+  }
+  .rul-gauge-bar {
+    height: 100%; border-radius: 4px;
+    transition: width 1s ease, background 1s ease;
+  }
+  .rul-status {
+    font-family: 'IBM Plex Mono', monospace; font-size: 0.68rem;
+    text-transform: uppercase; letter-spacing: 2px;
+  }
+
+  /* TABLE */
+  table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+  th {
+    font-family: 'Rajdhani', sans-serif; font-size: 0.7rem; font-weight: 600;
+    letter-spacing: 2px; text-transform: uppercase;
+    color: var(--text-dim); padding: 0.5rem 0.8rem;
+    border-bottom: 1px solid var(--border); text-align: left;
+  }
+  td { padding: 0.55rem 0.8rem; border-bottom: 1px solid rgba(255,255,255,0.04); }
+  tr:hover td { background: rgba(0,200,255,0.04); }
+  .badge {
+    display: inline-block; padding: 2px 8px; border-radius: 3px;
+    font-family: 'IBM Plex Mono', monospace; font-size: 0.62rem;
+    font-weight: 500; text-transform: uppercase; letter-spacing: 1px;
+  }
+  .badge-green { background: rgba(0,255,157,0.15); color: var(--green); }
+  .badge-orange { background: rgba(255,149,0,0.15); color: var(--orange); }
+  .badge-red { background: rgba(255,59,92,0.15); color: var(--red); }
+  .badge-cyan { background: rgba(0,200,255,0.12); color: var(--cyan); }
+
+  /* ENGINE SELECTOR */
+  .engine-selector {
+    display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem;
+  }
+  .eng-btn {
+    font-family: 'IBM Plex Mono', monospace; font-size: 0.7rem;
+    padding: 0.35rem 0.8rem; border-radius: 4px;
+    border: 1px solid var(--border); background: transparent;
+    color: var(--text-dim); cursor: pointer; transition: all 0.2s;
+  }
+  .eng-btn:hover { border-color: var(--cyan); color: var(--cyan); }
+  .eng-btn.active { border-color: var(--cyan); background: rgba(0,200,255,0.1); color: var(--cyan); }
+  .eng-btn.danger { border-color: var(--red); color: var(--red); }
+  .eng-btn.warn { border-color: var(--orange); color: var(--orange); }
+
+  /* SIM CONTROLS */
+  .sim-controls {
+    display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;
+    margin-bottom: 1rem;
+  }
+  .sim-btn {
+    font-family: 'Rajdhani', sans-serif; font-size: 0.8rem; font-weight: 600;
+    letter-spacing: 1.5px; text-transform: uppercase;
+    padding: 0.5rem 1.2rem; border-radius: 5px; cursor: pointer;
+    border: 1px solid var(--border); background: transparent;
+    color: var(--text); transition: all 0.2s;
+  }
+  .sim-btn:hover { border-color: var(--cyan); color: var(--cyan); }
+  .sim-btn.primary { background: rgba(0,200,255,0.12); border-color: var(--cyan); color: var(--cyan); }
+  .sim-btn.stop { border-color: var(--red); color: var(--red); }
+  .sim-speed {
+    font-family: 'IBM Plex Mono', monospace; font-size: 0.72rem;
+    color: var(--text-dim);
+  }
+  .sim-speed select {
+    background: var(--bg3); border: 1px solid var(--border);
+    color: var(--text); font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.72rem; padding: 0.3rem 0.5rem; border-radius: 4px;
+    cursor: pointer;
+  }
+
+  /* MAINTENANCE SCHEDULE */
+  .maint-card {
+    border: 1px solid var(--border); border-radius: 6px;
+    padding: 0.9rem; margin-bottom: 0.6rem;
+    display: flex; align-items: center; gap: 1rem;
+    transition: border-color 0.2s;
+  }
+  .maint-card:hover { border-color: var(--border-bright); }
+  .maint-icon { font-size: 1.5rem; min-width: 2rem; text-align: center; }
+  .maint-info { flex: 1; }
+  .maint-engine { font-family: 'Rajdhani', sans-serif; font-weight: 600; font-size: 0.9rem; color: var(--text-bright); }
+  .maint-detail { font-family: 'IBM Plex Mono', monospace; font-size: 0.65rem; color: var(--text-dim); margin-top: 2px; }
+  .maint-date { font-family: 'IBM Plex Mono', monospace; font-size: 0.7rem; color: var(--cyan); text-align: right; }
+
+  /* MODEL METRICS TABLE */
+  .metric-best { color: var(--green); font-weight: 600; }
+
+  /* RADAR CHART */
+  .radar-labels { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.5rem; justify-content: center; }
+  .rl { font-family: 'IBM Plex Mono', monospace; font-size: 0.62rem; }
+
+  /* SCROLLBAR */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg2); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  /* SECTION DIVIDER */
+  .section-title {
+    font-family: 'Rajdhani', sans-serif; font-size: 0.7rem; font-weight: 600;
+    letter-spacing: 3px; text-transform: uppercase; color: var(--text-dim);
+    margin: 1.5rem 0 0.75rem; display: flex; align-items: center; gap: 0.75rem;
+  }
+  .section-title::after {
+    content: ''; flex: 1; height: 1px; background: var(--border);
+  }
+
+  /* SENSOR FEED */
+  .sensor-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 0.6rem; margin-bottom: 1rem; }
+  .sensor-card {
+    background: rgba(255,255,255,0.02); border: 1px solid var(--border);
+    border-radius: 6px; padding: 0.7rem;
+  }
+  .sensor-name { font-family: 'IBM Plex Mono', monospace; font-size: 0.6rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; }
+  .sensor-val { font-family: 'Rajdhani', sans-serif; font-size: 1.4rem; font-weight: 600; color: var(--text-bright); }
+  .sensor-unit { font-size: 0.7rem; color: var(--text-dim); }
+  .sensor-bar { height: 3px; background: rgba(255,255,255,0.05); border-radius: 2px; margin-top: 0.4rem; }
+  .sensor-fill { height: 100%; border-radius: 2px; background: var(--cyan); transition: width 0.8s ease; }
+
+  /* FEATURE IMPORTANCE */
+  .feat-row { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.4rem; }
+  .feat-name { font-family: 'IBM Plex Mono', monospace; font-size: 0.62rem; color: var(--text-dim); width: 60px; text-align: right; }
+  .feat-bar-bg { flex: 1; height: 6px; background: rgba(255,255,255,0.05); border-radius: 3px; }
+  .feat-bar-fill { height: 100%; border-radius: 3px; background: linear-gradient(90deg, var(--cyan), var(--cyan2)); }
+  .feat-pct { font-family: 'IBM Plex Mono', monospace; font-size: 0.62rem; color: var(--cyan); width: 32px; }
+
+  /* TOOLTIP */
+  .tip { position: relative; display: inline-block; cursor: help; }
+
+  @media(max-width:1100px){
+    .kpi-row{ grid-template-columns: repeat(3,1fr); }
+    .grid-2,.grid-2-1,.grid-1-2{ grid-template-columns:1fr; }
+    .grid-3{ grid-template-columns:1fr 1fr; }
+    .sensor-grid{ grid-template-columns:repeat(2,1fr); }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">SDP <span>·</span> IoT Predictive Maintenance <span>· CNN–BiLSTM</span></div>
+  <div class="header-status">
+    <div class="live-dot"></div>
+    <span class="header-info">LIVE SIMULATION</span>
+    <span class="header-time" id="clock">--:--:--</span>
+    <span class="header-info">NASA C-MAPSS FD001</span>
+    <span class="header-info">VIT-AP · SDP 20250949</span>
+  </div>
+</header>
+
+<nav class="nav-tabs">
+  <button class="nav-tab active" onclick="showPage('dashboard',this)">📊 Dashboard</button>
+  <button class="nav-tab" onclick="showPage('simulation',this)">⚡ Live Simulation</button>
+  <button class="nav-tab" onclick="showPage('comparison',this)">🔬 Model Comparison</button>
+  <button class="nav-tab" onclick="showPage('maintenance',this)">🔧 Maintenance Schedule</button>
+  <button class="nav-tab" onclick="showPage('sensors',this)">📡 Sensor Feed</button>
+</nav>
+
+<main>
+
+<!-- ════════════════ PAGE: DASHBOARD ════════════════ -->
+<section class="page active" id="page-dashboard">
+
+  <div id="alert-area"></div>
+
+  <div class="kpi-row">
+    <div class="kpi-card">
+      <div class="kpi-label">Model RMSE</div>
+      <div class="kpi-value good">5.88<span class="kpi-unit">cycles</span></div>
+      <div class="kpi-sub">↓ vs baseline avg 14.3</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">R² Score</div>
+      <div class="kpi-value good">0.984</div>
+      <div class="kpi-sub">↑ vs LSTM 0.91</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Active Engines</div>
+      <div class="kpi-value" style="color:var(--cyan)" id="kpi-engines">10</div>
+      <div class="kpi-sub">FD001 fleet</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Critical Alerts</div>
+      <div class="kpi-value warn" id="kpi-alerts">2</div>
+      <div class="kpi-sub">RUL &lt; 30 cycles</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Avg Fleet RUL</div>
+      <div class="kpi-value" id="kpi-avg-rul" style="color:var(--cyan)">84<span class="kpi-unit">cycles</span></div>
+      <div class="kpi-sub" id="kpi-avg-sub">Fleet health: stable</div>
+    </div>
+  </div>
+
+  <!-- Engine fleet status -->
+  <div class="engine-selector" id="engine-fleet"></div>
+
+  <div class="grid-2-1">
+    <!-- RUL Degradation Chart -->
+    <div class="chart-panel">
+      <div class="panel-header">
+        <div class="panel-title">RUL Degradation — Actual vs Predicted</div>
+        <div class="panel-badge" id="deg-engine-badge">Engine #1</div>
+      </div>
+      <div class="chart-wrap" style="height:260px">
+        <canvas id="rulDegChart"></canvas>
+      </div>
+    </div>
+
+    <!-- RUL Gauge -->
+    <div class="chart-panel" style="display:flex;flex-direction:column;justify-content:center">
+      <div class="panel-header"><div class="panel-title">Selected Engine RUL</div></div>
+      <div class="rul-gauge-wrap">
+        <div class="rul-gauge-label">Remaining Useful Life</div>
+        <div class="rul-gauge-value" id="gauge-rul" style="color:var(--green)">142</div>
+        <div class="rul-gauge-label" style="margin-top:0">cycles</div>
+        <div class="rul-gauge-bar-wrap">
+          <div class="rul-gauge-bar" id="gauge-bar" style="width:95%;background:var(--green)"></div>
+        </div>
+        <div class="rul-status" id="gauge-status" style="color:var(--green)">● HEALTHY</div>
+      </div>
+      <div style="margin-top:1rem;border-top:1px solid var(--border);padding-top:0.8rem;">
+        <div style="display:flex;justify-content:space-between;font-family:'IBM Plex Mono',monospace;font-size:0.65rem;color:var(--text-dim);margin-bottom:0.3rem">
+          <span>Predicted</span><span id="pred-val" style="color:var(--cyan)">140</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-family:'IBM Plex Mono',monospace;font-size:0.65rem;color:var(--text-dim);margin-bottom:0.3rem">
+          <span>Actual</span><span id="actual-val" style="color:var(--text-bright)">142</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-family:'IBM Plex Mono',monospace;font-size:0.65rem;color:var(--text-dim)">
+          <span>Error</span><span id="error-val" style="color:var(--orange)">2 cycles</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid-3">
+    <!-- Loss Curve -->
+    <div class="chart-panel">
+      <div class="panel-header">
+        <div class="panel-title">Training Loss Curve</div>
+        <div class="panel-badge">MSE Loss</div>
+      </div>
+      <div class="chart-wrap" style="height:200px"><canvas id="lossChart"></canvas></div>
+    </div>
+
+    <!-- Scatter -->
+    <div class="chart-panel">
+      <div class="panel-header">
+        <div class="panel-title">Prediction Scatter</div>
+        <div class="panel-badge">Actual vs Pred</div>
+      </div>
+      <div class="chart-wrap" style="height:200px"><canvas id="scatterChart"></canvas></div>
+    </div>
+
+    <!-- Error Distribution -->
+    <div class="chart-panel">
+      <div class="panel-header">
+        <div class="panel-title">Residual Error Distribution</div>
+        <div class="panel-badge">Histogram</div>
+      </div>
+      <div class="chart-wrap" style="height:200px"><canvas id="errorDistChart"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Feature Importance -->
+  <div class="grid-2">
+    <div class="chart-panel">
+      <div class="panel-header">
+        <div class="panel-title">Top Sensor Feature Importance</div>
+        <div class="panel-badge">CNN weights</div>
+      </div>
+      <div id="feat-bars" style="margin-top:0.5rem"></div>
+    </div>
+
+    <!-- System Architecture -->
+    <div class="chart-panel">
+      <div class="panel-header">
+        <div class="panel-title">CNN–BiLSTM Pipeline</div>
+        <div class="panel-badge">Architecture</div>
+      </div>
+      <div id="arch-visual"></div>
+    </div>
+  </div>
+
+</section>
+
+<!-- ════════════════ PAGE: SIMULATION ════════════════ -->
+<section class="page" id="page-simulation">
+
+  <div class="sim-controls">
+    <button class="sim-btn primary" id="btn-start" onclick="startSim()">▶ Start Simulation</button>
+    <button class="sim-btn stop" id="btn-stop" onclick="stopSim()" style="display:none">■ Stop</button>
+    <button class="sim-btn" onclick="resetSim()">↺ Reset</button>
+    <div class="sim-speed">Speed: <select id="sim-speed-sel">
+      <option value="1500">Slow (1.5s)</option>
+      <option value="800" selected>Normal (0.8s)</option>
+      <option value="300">Fast (0.3s)</option>
+    </select></div>
+    <div class="sim-speed" style="margin-left:auto">Engine: <select id="sim-engine-sel" onchange="selectSimEngine(this.value)">
+      <option value="0">Engine #1</option>
+      <option value="3">Engine #4</option>
+      <option value="6">Engine #7</option>
+      <option value="8">Engine #9</option>
+    </select></div>
+  </div>
+
+  <div id="sim-alert-area"></div>
+
+  <div class="grid-2">
+    <!-- Live RUL trace -->
+    <div class="chart-panel">
+      <div class="panel-header">
+        <div class="panel-title">Live RUL Trace</div>
+        <div class="panel-badge" id="sim-cycle-badge">Cycle 0</div>
+      </div>
+      <div class="chart-wrap" style="height:260px"><canvas id="simLiveChart"></canvas></div>
+    </div>
+
+    <!-- Live sensor values -->
+    <div class="chart-panel">
+      <div class="panel-header">
+        <div class="panel-title">Sensor Readings (Live)</div>
+        <div class="panel-badge">Real-time</div>
+      </div>
+      <div class="chart-wrap" style="height:260px"><canvas id="simSensorChart"></canvas></div>
+    </div>
+  </div>
+
+  <div class="grid-3">
+    <div class="chart-panel" style="display:flex;flex-direction:column;align-items:center;justify-content:center">
+      <div class="rul-gauge-wrap" style="width:100%">
+        <div class="rul-gauge-label">Current RUL</div>
+        <div class="rul-gauge-value" id="sim-rul-big" style="color:var(--green);font-size:4rem">—</div>
+        <div class="rul-gauge-label">cycles remaining</div>
+        <div class="rul-gauge-bar-wrap" style="margin:0.6rem 0">
+          <div class="rul-gauge-bar" id="sim-gauge-bar" style="width:0%;background:var(--green)"></div>
+        </div>
+        <div class="rul-status" id="sim-status" style="color:var(--text-dim)">● WAITING</div>
+      </div>
+    </div>
+    <div class="chart-panel">
+      <div class="panel-header"><div class="panel-title">Degradation Index</div></div>
+      <div class="chart-wrap" style="height:180px"><canvas id="simDegChart"></canvas></div>
+    </div>
+    <div class="chart-panel">
+      <div class="panel-header"><div class="panel-title">Prediction Confidence</div></div>
+      <div id="sim-confidence" style="padding:0.5rem 0">
+        <div style="text-align:center;font-family:'IBM Plex Mono',monospace;font-size:0.65rem;color:var(--text-dim);margin-bottom:0.5rem">Model Accuracy (±10 cycles tolerance)</div>
+        <div style="text-align:center">
+          <span id="sim-conf-pct" style="font-family:'Rajdhani',sans-serif;font-size:3rem;font-weight:700;color:var(--green)">—%</span>
+        </div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;color:var(--text-dim);margin-top:0.8rem">
+          <div style="display:flex;justify-content:space-between;margin-bottom:0.3rem"><span>RMSE</span><span id="sim-rmse" style="color:var(--cyan)">—</span></div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:0.3rem"><span>MAE</span><span id="sim-mae" style="color:var(--cyan)">—</span></div>
+          <div style="display:flex;justify-content:space-between"><span>R²</span><span id="sim-r2" style="color:var(--cyan)">—</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════ PAGE: MODEL COMPARISON ════════════════ -->
+<section class="page" id="page-comparison">
+
+  <div class="section-title">Performance Metrics Comparison</div>
+
+  <div class="grid-2">
+    <div class="chart-panel">
+      <div class="panel-header"><div class="panel-title">RMSE Comparison</div><div class="panel-badge">Lower is Better</div></div>
+      <div class="chart-wrap" style="height:240px"><canvas id="rmseChart"></canvas></div>
+    </div>
+    <div class="chart-panel">
+      <div class="panel-header"><div class="panel-title">R² Score Comparison</div><div class="panel-badge">Higher is Better</div></div>
+      <div class="chart-wrap" style="height:240px"><canvas id="r2Chart"></canvas></div>
+    </div>
+  </div>
+
+  <div class="grid-2">
+    <div class="chart-panel">
+      <div class="panel-header"><div class="panel-title">Multi-Metric Radar</div><div class="panel-badge">All Models</div></div>
+      <div class="chart-wrap" style="height:280px"><canvas id="radarChart"></canvas></div>
+    </div>
+    <div class="chart-panel">
+      <div class="panel-header"><div class="panel-title">All Metrics — Summary Table</div></div>
+      <table>
+        <thead>
+          <tr>
+            <th>Model</th><th>RMSE</th><th>MAE</th><th>MSE</th><th>R²</th><th>Rank</th>
+          </tr>
+        </thead>
+        <tbody id="metrics-table"></tbody>
+      </table>
+      <div style="margin-top:1rem;padding-top:0.8rem;border-top:1px solid var(--border)">
+        <div class="section-title" style="margin-top:0">Model Architecture Summary</div>
+        <table>
+          <thead><tr><th>Model</th><th>Complexity</th><th>Spatial</th><th>Temporal</th><th>Grade</th></tr></thead>
+          <tbody>
+            <tr><td>Linear Regression</td><td><span class="badge badge-cyan">Low</span></td><td>✗</td><td>✗</td><td><span class="badge badge-orange">Moderate</span></td></tr>
+            <tr><td>Random Forest</td><td><span class="badge badge-cyan">Low</span></td><td>Partial</td><td>✗</td><td><span class="badge badge-orange">Moderate</span></td></tr>
+            <tr><td>CNN (standalone)</td><td><span class="badge badge-orange">Medium</span></td><td>✓</td><td>✗</td><td><span class="badge badge-orange">High</span></td></tr>
+            <tr><td>LSTM (standalone)</td><td><span class="badge badge-orange">Medium</span></td><td>✗</td><td>✓</td><td><span class="badge badge-orange">High</span></td></tr>
+            <tr><td style="color:var(--cyan);font-weight:600">CNN–BiLSTM (Ours)</td><td><span class="badge badge-orange">Balanced</span></td><td>✓</td><td>✓ Bi</td><td><span class="badge badge-green">Best</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="chart-panel full">
+    <div class="panel-header"><div class="panel-title">MAE + MSE Bar Groups</div><div class="panel-badge">All Baseline Models</div></div>
+    <div class="chart-wrap" style="height:220px"><canvas id="maeMseChart"></canvas></div>
+  </div>
+</section>
+
+<!-- ════════════════ PAGE: MAINTENANCE ════════════════ -->
+<section class="page" id="page-maintenance">
+
+  <div class="kpi-row" style="grid-template-columns:repeat(4,1fr)">
+    <div class="kpi-card">
+      <div class="kpi-label">Scheduled This Week</div>
+      <div class="kpi-value" style="color:var(--cyan)">3</div>
+      <div class="kpi-sub">Engine #4, #9, #7</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Critical (RUL &lt;30)</div>
+      <div class="kpi-value danger">2</div>
+      <div class="kpi-sub">Immediate action</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Warning (RUL &lt;60)</div>
+      <div class="kpi-value warn">3</div>
+      <div class="kpi-sub">Plan within 5 days</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Healthy</div>
+      <div class="kpi-value good">5</div>
+      <div class="kpi-sub">No action needed</div>
+    </div>
+  </div>
+
+  <div class="grid-2">
+    <div class="chart-panel">
+      <div class="panel-header"><div class="panel-title">Maintenance Queue</div><div class="panel-badge">Priority Order</div></div>
+      <div id="maint-queue"></div>
+    </div>
+    <div class="chart-panel">
+      <div class="panel-header"><div class="panel-title">Fleet RUL Overview</div></div>
+      <div class="chart-wrap" style="height:280px"><canvas id="fleetRulChart"></canvas></div>
+    </div>
+  </div>
+
+  <div class="chart-panel">
+    <div class="panel-header"><div class="panel-title">Maintenance Log — All Engines</div></div>
+    <table>
+      <thead>
+        <tr><th>#</th><th>Engine ID</th><th>Predicted RUL</th><th>Status</th><th>Recommended Action</th><th>Scheduled Date</th><th>Priority</th></tr>
+      </thead>
+      <tbody id="maint-table"></tbody>
+    </table>
+  </div>
+
+</section>
+
+<!-- ════════════════ PAGE: SENSOR FEED ════════════════ -->
+<section class="page" id="page-sensors">
+
+  <div class="sim-controls">
+    <button class="sim-btn primary" id="sensor-start" onclick="startSensorFeed()">▶ Start Feed</button>
+    <button class="sim-btn stop" id="sensor-stop" onclick="stopSensorFeed()" style="display:none">■ Stop</button>
+    <div class="sim-speed">Engine: <select id="sensor-engine-sel">
+      <option value="0">Engine #1</option><option value="1">Engine #2</option>
+      <option value="2">Engine #3</option><option value="3">Engine #4</option>
+    </select></div>
+  </div>
+
+  <div class="sensor-grid" id="sensor-cards"></div>
+
+  <div class="grid-2">
+    <div class="chart-panel">
+      <div class="panel-header"><div class="panel-title">Sensor Time Series</div><div class="panel-badge">Last 50 Cycles</div></div>
+      <div class="chart-wrap" style="height:250px"><canvas id="sensorTsChart"></canvas></div>
+    </div>
+    <div class="chart-panel">
+      <div class="panel-header"><div class="panel-title">Sensor Correlation Heatmap</div></div>
+      <canvas id="heatmapCanvas" width="400" height="250"></canvas>
+    </div>
+  </div>
+
+</section>
+
+</main>
+
+<script>
+// ══════════════════════════════════════════
+// DATA
+// ══════════════════════════════════════════
+const MODELS = {
+  labels: ['Random Forest','Linear Reg','CNN','LSTM','CNN–BiLSTM'],
+  rmse:   [13.73, 17.15, 14.06, 12.17, 5.88],
+  mae:    [10.50, 14.14, 10.53,  8.36, 4.35],
+  mse:    [188.63, 294.2, 197.9, 148.1, 34.65],
+  r2:     [0.89, 0.83, 0.88, 0.91, 0.984],
+  colors: ['#5a7a9a','#5a7a9a','#3a8abd','#3a9acd','#00c8ff']
+};
+
+// Simulated engine fleet data
+const ENGINES = [
+  { id:1, rul:142, maxRul:150 },{ id:2, rul:78, maxRul:150 },{ id:3, rul:55, maxRul:150 },
+  { id:4, rul:22, maxRul:150 },{ id:5, rul:112, maxRul:150 },{ id:6, rul:95, maxRul:150 },
+  { id:7, rul:41, maxRul:150 },{ id:8, rul:130, maxRul:150 },{ id:9, rul:18, maxRul:150 },
+  { id:10, rul:67, maxRul:150 }
+];
+
+const SENSOR_NAMES = ['T2','T24','T30','T50','P2','P15','P30','Nf','Nc','epr','Ps30','phi','NRf','NRc','BPR','farB','htBleed','Nf_dmd','PCNfR_dmd','W31','W32'];
+const TOP_FEATURES = [
+  {name:'T50',pct:92},{name:'T30',pct:87},{name:'Ps30',pct:81},{name:'phi',pct:75},
+  {name:'NRc',pct:70},{name:'T24',pct:63},{name:'Nf',pct:58},{name:'W32',pct:52}
+];
+
+const CHART_DEFAULTS = {
+  color: 'rgba(200,224,244,0.7)',
+  grid: 'rgba(0,200,255,0.08)',
+  tick: 'rgba(200,224,244,0.4)',
+  font: { family: "'IBM Plex Mono', monospace", size: 10 }
+};
+
+// Generate synthetic degradation curve
+function genDegCurve(maxRul, n=80) {
+  const actual=[], predicted=[];
+  for(let i=0;i<n;i++){
+    const t = i/n;
+    const rul = Math.max(0, maxRul*(1-t) - 10*Math.pow(t,2)*Math.random());
+    const a = Math.round(rul + (Math.random()-0.5)*4);
+    const p = Math.round(rul + (Math.random()-0.5)*8 + 1.5);
+    actual.push(Math.max(0,a));
+    predicted.push(Math.max(0,p));
+  }
+  return {actual, predicted};
+}
+
+// ══════════════════════════════════════════
+// NAVIGATION
+// ══════════════════════════════════════════
+function showPage(id, btn) {
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(b=>b.classList.remove('active'));
+  document.getElementById('page-'+id).classList.add('active');
+  if(btn) btn.classList.add('active');
+}
+
+// ══════════════════════════════════════════
+// CLOCK
+// ══════════════════════════════════════════
+function updateClock(){
+  document.getElementById('clock').textContent = new Date().toLocaleTimeString('en-GB');
+}
+setInterval(updateClock, 1000); updateClock();
+
+// ══════════════════════════════════════════
+// CHART DEFAULTS
+// ══════════════════════════════════════════
+Chart.defaults.color = CHART_DEFAULTS.color;
+Chart.defaults.font = CHART_DEFAULTS.font;
+
+function gridOpts(){ return { color: CHART_DEFAULTS.grid, borderColor: CHART_DEFAULTS.grid }; }
+function tickOpts(){ return { color: CHART_DEFAULTS.tick }; }
+
+// ══════════════════════════════════════════
+// ALERTS
+// ══════════════════════════════════════════
+function renderAlerts() {
+  const critical = ENGINES.filter(e=>e.rul < 30);
+  const warn = ENGINES.filter(e=>e.rul>=30 && e.rul<60);
+  let html = '';
+  if(critical.length) {
+    html += `<div class="alert-banner danger"><span class="alert-icon">🚨</span>
+    CRITICAL ALERT: Engine(s) ${critical.map(e=>'#'+e.id).join(', ')} — RUL below 30 cycles. Immediate maintenance required.</div>`;
+  }
+  if(warn.length) {
+    html += `<div class="alert-banner warning"><span class="alert-icon">⚠️</span>
+    WARNING: Engine(s) ${warn.map(e=>'#'+e.id).join(', ')} — RUL below 60 cycles. Schedule maintenance soon.</div>`;
+  }
+  if(!critical.length && !warn.length) {
+    html = `<div class="alert-banner ok"><span class="alert-icon">✅</span>All engines operating within safe RUL thresholds.</div>`;
+  }
+  document.getElementById('alert-area').innerHTML = html;
+}
+
+// ══════════════════════════════════════════
+// ENGINE FLEET BUTTONS
+// ══════════════════════════════════════════
+let selectedEngine = 0;
+function renderFleet() {
+  const el = document.getElementById('engine-fleet');
+  el.innerHTML = ENGINES.map((e,i)=>{
+    const cls = e.rul < 30 ? 'danger' : e.rul < 60 ? 'warn' : '';
+    return `<button class="eng-btn ${cls} ${i===selectedEngine?'active':''}" onclick="selectEngine(${i})">
+      #${e.id} · ${e.rul}
+    </button>`;
+  }).join('');
+}
+function selectEngine(i) {
+  selectedEngine = i;
+  renderFleet();
+  updateGauge();
+  updateDegChart();
+  document.getElementById('deg-engine-badge').textContent = 'Engine #'+ENGINES[i].id;
+}
+function updateGauge() {
+  const e = ENGINES[selectedEngine];
+  const pct = e.rul/e.maxRul;
+  const color = e.rul<30 ? 'var(--red)' : e.rul<60 ? 'var(--orange)' : 'var(--green)';
+  const status = e.rul<30 ? '● CRITICAL' : e.rul<60 ? '● WARNING' : '● HEALTHY';
+  document.getElementById('gauge-rul').textContent = e.rul;
+  document.getElementById('gauge-rul').style.color = color;
+  document.getElementById('gauge-bar').style.width = (pct*100)+'%';
+  document.getElementById('gauge-bar').style.background = color;
+  document.getElementById('gauge-status').textContent = status;
+  document.getElementById('gauge-status').style.color = color;
+  // small noise for pred
+  const pred = Math.max(0, e.rul + Math.round((Math.random()-0.5)*6));
+  document.getElementById('pred-val').textContent = pred;
+  document.getElementById('actual-val').textContent = e.rul;
+  document.getElementById('error-val').textContent = Math.abs(e.rul-pred)+' cycles';
+  document.getElementById('kpi-alerts').textContent = ENGINES.filter(e=>e.rul<30).length;
+  const avg = Math.round(ENGINES.reduce((a,b)=>a+b.rul,0)/ENGINES.length);
+  document.getElementById('kpi-avg-rul').innerHTML = avg+'<span class="kpi-unit">cycles</span>';
+}
+
+// ══════════════════════════════════════════
+// RUL DEGRADATION CHART
+// ══════════════════════════════════════════
+let rulDegChart;
+function buildDegChart() {
+  const labels = Array.from({length:80},(_,i)=>i+1);
+  const {actual, predicted} = genDegCurve(ENGINES[selectedEngine].maxRul);
+  rulDegChart = new Chart(document.getElementById('rulDegChart'), {
+    type:'line',
+    data: {
+      labels,
+      datasets:[
+        { label:'Actual RUL', data:actual, borderColor:'rgba(0,255,157,0.8)', borderWidth:2, pointRadius:0, tension:0.3, fill:false },
+        { label:'Predicted RUL', data:predicted, borderColor:'rgba(0,200,255,0.8)', borderWidth:2, pointRadius:0, tension:0.3, borderDash:[5,3], fill:false }
+      ]
+    },
+    options: {
+      responsive:true, maintainAspectRatio:false, animation:{ duration:800 },
+      plugins:{ legend:{ labels:{ boxWidth:12, font:{size:10} } } },
+      scales:{
+        x:{ grid:gridOpts(), ticks:{ ...tickOpts(), maxTicksLimit:10 }, title:{ display:true, text:'Cycle', color:'rgba(200,224,244,0.4)', font:{size:9} } },
+        y:{ grid:gridOpts(), ticks:tickOpts(), title:{ display:true, text:'RUL (cycles)', color:'rgba(200,224,244,0.4)', font:{size:9} } }
+      }
+    }
+  });
+}
+function updateDegChart() {
+  if(!rulDegChart) return;
+  const {actual,predicted} = genDegCurve(ENGINES[selectedEngine].maxRul);
+  rulDegChart.data.datasets[0].data = actual;
+  rulDegChart.data.datasets[1].data = predicted;
+  rulDegChart.update();
+}
+
+// ══════════════════════════════════════════
+// TRAINING LOSS CHART
+// ══════════════════════════════════════════
+function buildLossChart() {
+  const epochs = Array.from({length:50},(_,i)=>i+1);
+  const train=[], val=[];
+  let tl=500, vl=520;
+  for(let i=0;i<50;i++){
+    tl = tl*0.88 + Math.random()*5;
+    vl = vl*0.89 + Math.random()*8;
+    train.push(+tl.toFixed(1));
+    val.push(+vl.toFixed(1));
+  }
+  new Chart(document.getElementById('lossChart'), {
+    type:'line',
+    data:{
+      labels:epochs,
+      datasets:[
+        {label:'Train Loss',data:train,borderColor:'rgba(0,200,255,0.8)',borderWidth:1.5,pointRadius:0,tension:0.4,fill:false},
+        {label:'Val Loss',data:val,borderColor:'rgba(255,149,0,0.7)',borderWidth:1.5,pointRadius:0,tension:0.4,fill:false}
+      ]
+    },
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{boxWidth:10,font:{size:9}}}},
+      scales:{x:{grid:gridOpts(),ticks:{...tickOpts(),maxTicksLimit:8}},y:{grid:gridOpts(),ticks:tickOpts()}}}
+  });
+}
+
+// ══════════════════════════════════════════
+// SCATTER CHART
+// ══════════════════════════════════════════
+function buildScatterChart() {
+  const data = Array.from({length:80},()=>{
+    const a = Math.random()*150;
+    return {x:a, y: a+(Math.random()-0.5)*12};
+  });
+  const ideal = [{x:0,y:0},{x:150,y:150}];
+  new Chart(document.getElementById('scatterChart'), {
+    type:'scatter',
+    data:{
+      datasets:[
+        {label:'Predicted vs Actual',data,backgroundColor:'rgba(0,200,255,0.4)',pointRadius:3,pointBorderWidth:0},
+        {label:'Ideal',data:ideal,type:'line',borderColor:'rgba(0,255,157,0.5)',borderWidth:1.5,pointRadius:0,fill:false}
+      ]
+    },
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{boxWidth:10,font:{size:9}}}},
+      scales:{x:{grid:gridOpts(),ticks:tickOpts(),title:{display:true,text:'Actual',color:'rgba(200,224,244,0.4)',font:{size:9}}},
+              y:{grid:gridOpts(),ticks:tickOpts(),title:{display:true,text:'Predicted',color:'rgba(200,224,244,0.4)',font:{size:9}}}}}
+  });
+}
+
+// ══════════════════════════════════════════
+// ERROR DISTRIBUTION
+// ══════════════════════════════════════════
+function buildErrorDistChart() {
+  const bins = ['<-15','-15 to -10','-10 to -5','-5 to 0','0 to 5','5 to 10','10 to 15','>15'];
+  const counts = [2,5,12,28,31,14,6,2];
+  new Chart(document.getElementById('errorDistChart'), {
+    type:'bar',
+    data:{labels:bins,datasets:[{label:'Count',data:counts,backgroundColor:'rgba(0,200,255,0.5)',borderColor:'rgba(0,200,255,0.8)',borderWidth:1}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+      scales:{x:{grid:gridOpts(),ticks:{...tickOpts(),font:{size:8}}},y:{grid:gridOpts(),ticks:tickOpts()}}}
+  });
+}
+
+// ══════════════════════════════════════════
+// FEATURE IMPORTANCE BARS
+// ══════════════════════════════════════════
+function buildFeatureBars() {
+  const el = document.getElementById('feat-bars');
+  el.innerHTML = TOP_FEATURES.map(f=>`
+    <div class="feat-row">
+      <div class="feat-name">${f.name}</div>
+      <div class="feat-bar-bg"><div class="feat-bar-fill" style="width:${f.pct}%"></div></div>
+      <div class="feat-pct">${f.pct}%</div>
+    </div>`).join('');
+}
+
+// ══════════════════════════════════════════
+// ARCHITECTURE VISUAL
+// ══════════════════════════════════════════
+function buildArchVisual() {
+  const stages = [
+    {icon:'📡',label:'Sensor Input',sub:'21 features × 30 seq'},
+    {icon:'⚙️',label:'Conv1D + BN',sub:'Spatial extraction'},
+    {icon:'🔃',label:'BiLSTM',sub:'Temporal both directions'},
+    {icon:'🔢',label:'Dense Layers',sub:'RUL regression'},
+    {icon:'📊',label:'RUL Output',sub:'Continuous prediction'}
+  ];
+  document.getElementById('arch-visual').innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:center;gap:0;flex-wrap:nowrap;overflow-x:auto;padding:0.5rem 0">
+      ${stages.map((s,i)=>`
+        <div style="text-align:center;min-width:80px">
+          <div style="font-size:1.5rem">${s.icon}</div>
+          <div style="font-family:'Rajdhani',sans-serif;font-size:0.72rem;font-weight:600;color:var(--cyan);margin:0.3rem 0 0.2rem">${s.label}</div>
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:0.55rem;color:var(--text-dim)">${s.sub}</div>
+        </div>
+        ${i<stages.length-1?'<div style="color:var(--border-bright);font-size:1.2rem;margin:0 0.3rem">→</div>':''}
+      `).join('')}
+    </div>`;
+}
+
+// ══════════════════════════════════════════
+// MODEL COMPARISON CHARTS
+// ══════════════════════════════════════════
+function buildComparisonCharts() {
+  const highlight = (arr, cb) => arr.map((v,i)=>cb(v,i));
+  const barColors = MODELS.rmse.map((_,i)=>i===4?'rgba(0,200,255,0.8)':'rgba(90,122,154,0.6)');
+  const r2Colors = MODELS.r2.map((_,i)=>i===4?'rgba(0,255,157,0.8)':'rgba(90,122,154,0.6)');
+
+  new Chart(document.getElementById('rmseChart'), {
+    type:'bar', data:{labels:MODELS.labels,datasets:[{label:'RMSE',data:MODELS.rmse,backgroundColor:barColors,borderWidth:0}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+      scales:{x:{grid:gridOpts(),ticks:{...tickOpts(),font:{size:9}}},y:{grid:gridOpts(),ticks:tickOpts()}}}
+  });
+
+  new Chart(document.getElementById('r2Chart'), {
+    type:'bar', data:{labels:MODELS.labels,datasets:[{label:'R²',data:MODELS.r2,backgroundColor:r2Colors,borderWidth:0}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+      scales:{x:{grid:gridOpts(),ticks:{...tickOpts(),font:{size:9}}},y:{grid:gridOpts(),ticks:tickOpts(),min:0.7}}}
+  });
+
+  // Radar
+  const normalize = (arr) => { const max=Math.max(...arr),min=Math.min(...arr); return arr.map(v=>((v-min)/(max-min))*100); };
+  const rmseN = normalize(MODELS.rmse).map(v=>100-v);
+  const maeN = normalize(MODELS.mae).map(v=>100-v);
+  const mseN = normalize(MODELS.mse).map(v=>100-v);
+  const r2N = normalize(MODELS.r2);
+  new Chart(document.getElementById('radarChart'), {
+    type:'radar',
+    data:{
+      labels:['RMSE (inv)','MAE (inv)','MSE (inv)','R² Score'],
+      datasets: MODELS.labels.map((lbl,i)=>({
+        label:lbl,
+        data:[rmseN[i],maeN[i],mseN[i],r2N[i]],
+        borderColor:MODELS.colors[i], backgroundColor:MODELS.colors[i]+'22',
+        borderWidth:i===4?2:1, pointRadius:2
+      }))
+    },
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{labels:{boxWidth:10,font:{size:9}}}},
+      scales:{r:{grid:{color:'rgba(0,200,255,0.1)'},angleLines:{color:'rgba(0,200,255,0.1)'},pointLabels:{font:{size:9}},ticks:{display:false}}}}
+  });
+
+  new Chart(document.getElementById('maeMseChart'), {
+    type:'bar',
+    data:{labels:MODELS.labels,datasets:[
+      {label:'MAE',data:MODELS.mae,backgroundColor:'rgba(0,200,255,0.6)',borderWidth:0},
+      {label:'MSE',data:MODELS.mse,backgroundColor:'rgba(255,149,0,0.5)',borderWidth:0,yAxisID:'y1'}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{labels:{boxWidth:10,font:{size:9}}}},
+      scales:{x:{grid:gridOpts(),ticks:{...tickOpts(),font:{size:9}}},
+              y:{grid:gridOpts(),ticks:tickOpts(),title:{display:true,text:'MAE',color:'rgba(200,224,244,0.4)',font:{size:9}}},
+              y1:{position:'right',grid:{display:false},ticks:tickOpts(),title:{display:true,text:'MSE',color:'rgba(200,224,244,0.4)',font:{size:9}}}}}
+  });
+
+  // Metrics table
+  const tbody = document.getElementById('metrics-table');
+  const sorted = MODELS.labels.map((lbl,i)=>({lbl,rmse:MODELS.rmse[i],mae:MODELS.mae[i],mse:MODELS.mse[i],r2:MODELS.r2[i]}))
+    .sort((a,b)=>a.rmse-b.rmse);
+  tbody.innerHTML = sorted.map((m,i)=>`
+    <tr>
+      <td style="${m.lbl.includes('BiLSTM')?'color:var(--cyan);font-weight:600':''}"> ${m.lbl}</td>
+      <td class="${m.rmse===5.88?'metric-best':''}">${m.rmse}</td>
+      <td class="${m.mae===4.35?'metric-best':''}">${m.mae}</td>
+      <td class="${m.mse===34.65?'metric-best':''}">${m.mse}</td>
+      <td class="${m.r2===0.984?'metric-best':''}">${m.r2}</td>
+      <td>${['🥇','🥈','🥉','4th','5th'][i]}</td>
+    </tr>`).join('');
+}
+
+// ══════════════════════════════════════════
+// MAINTENANCE PAGE
+// ══════════════════════════════════════════
+function buildMaintenancePage() {
+  // Queue cards
+  const sortedEng = [...ENGINES].sort((a,b)=>a.rul-b.rul);
+  const queue = document.getElementById('maint-queue');
+  queue.innerHTML = sortedEng.slice(0,6).map(e=>{
+    const crit = e.rul<30, warn = e.rul<60;
+    const icon = crit?'🚨':warn?'⚠️':'🔧';
+    const action = crit?'Immediate inspection & overhaul':warn?'Schedule inspection within 5 days':'Routine service at next downtime';
+    const days = Math.max(1,Math.floor(e.rul/8));
+    const date = new Date(); date.setDate(date.getDate()+days);
+    return `<div class="maint-card" style="border-color:${crit?'rgba(255,59,92,0.3)':warn?'rgba(255,149,0,0.3)':'var(--border)'}">
+      <div class="maint-icon">${icon}</div>
+      <div class="maint-info">
+        <div class="maint-engine">Engine #${e.id} — RUL: ${e.rul} cycles</div>
+        <div class="maint-detail">${action}</div>
+      </div>
+      <div class="maint-date">${date.toLocaleDateString('en-GB',{day:'2-digit',month:'short'})}</div>
+    </div>`;
+  }).join('');
+
+  // Fleet bar chart
+  new Chart(document.getElementById('fleetRulChart'), {
+    type:'bar',
+    data:{labels:ENGINES.map(e=>'#'+e.id),datasets:[{
+      label:'RUL (cycles)',
+      data:ENGINES.map(e=>e.rul),
+      backgroundColor:ENGINES.map(e=>e.rul<30?'rgba(255,59,92,0.7)':e.rul<60?'rgba(255,149,0,0.7)':'rgba(0,200,255,0.6)'),
+      borderWidth:0
+    }]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+      scales:{x:{grid:gridOpts(),ticks:tickOpts()},y:{grid:gridOpts(),ticks:tickOpts(),min:0,max:160}}}
+  });
+
+  // Full table
+  const tbody = document.getElementById('maint-table');
+  tbody.innerHTML = sortedEng.map((e,i)=>{
+    const crit=e.rul<30, warn=e.rul<60;
+    const cls = crit?'badge-red':warn?'badge-orange':'badge-green';
+    const status = crit?'Critical':warn?'Warning':'Healthy';
+    const action = crit?'Immediate overhaul':warn?'Inspect within 5 days':'Monitor — next routine';
+    const days = Math.max(1,Math.floor(e.rul/8));
+    const date = new Date(); date.setDate(date.getDate()+days);
+    const priority = crit?'P1':warn?'P2':'P3';
+    return `<tr>
+      <td>${i+1}</td>
+      <td>Engine #${e.id}</td>
+      <td style="color:${crit?'var(--red)':warn?'var(--orange)':'var(--green)'}">${e.rul}</td>
+      <td><span class="badge ${cls}">${status}</span></td>
+      <td style="font-size:0.72rem">${action}</td>
+      <td>${date.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'})}</td>
+      <td><span class="badge ${crit?'badge-red':warn?'badge-orange':'badge-cyan'}">${priority}</span></td>
+    </tr>`;
+  }).join('');
+}
+
+// ══════════════════════════════════════════
+// LIVE SIMULATION
+// ══════════════════════════════════════════
+let simInterval = null, simCycle = 0, simRunning = false;
+let simData = { actual:[], predicted:[], deg:[], temp:[], pressure:[], rpm:[] };
+let simEngineIdx = 0;
+const SIM_MAX_RUL = 150;
+
+let simLiveChart, simSensorChrt, simDegChrt;
+
+function buildSimCharts() {
+  simLiveChart = new Chart(document.getElementById('simLiveChart'), {
+    type:'line',
+    data:{labels:[],datasets:[
+      {label:'Actual RUL',data:[],borderColor:'rgba(0,255,157,0.8)',borderWidth:2,pointRadius:0,tension:0.3,fill:false},
+      {label:'Predicted RUL',data:[],borderColor:'rgba(0,200,255,0.8)',borderWidth:2,pointRadius:0,tension:0.3,borderDash:[4,3],fill:false}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,animation:{duration:300},
+      plugins:{legend:{labels:{boxWidth:10,font:{size:9}}}},
+      scales:{x:{grid:gridOpts(),ticks:{...tickOpts(),maxTicksLimit:10}},
+              y:{grid:gridOpts(),ticks:tickOpts(),min:0,max:SIM_MAX_RUL+10,title:{display:true,text:'RUL',color:'rgba(200,224,244,0.4)',font:{size:9}}}}}
+  });
+
+  simSensorChrt = new Chart(document.getElementById('simSensorChart'), {
+    type:'line',
+    data:{labels:[],datasets:[
+      {label:'T50 (Temp)',data:[],borderColor:'rgba(255,59,92,0.8)',borderWidth:1.5,pointRadius:0,tension:0.4,fill:false},
+      {label:'Ps30 (Pressure)',data:[],borderColor:'rgba(0,200,255,0.8)',borderWidth:1.5,pointRadius:0,tension:0.4,fill:false},
+      {label:'Nf (Fan RPM)',data:[],borderColor:'rgba(0,255,157,0.8)',borderWidth:1.5,pointRadius:0,tension:0.4,fill:false}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,animation:{duration:300},
+      plugins:{legend:{labels:{boxWidth:10,font:{size:9}}}},
+      scales:{x:{grid:gridOpts(),ticks:{...tickOpts(),maxTicksLimit:10}},y:{grid:gridOpts(),ticks:tickOpts()}}}
+  });
+
+  simDegChrt = new Chart(document.getElementById('simDegChart'), {
+    type:'line',
+    data:{labels:[],datasets:[{label:'Degradation Index',data:[],borderColor:'rgba(255,149,0,0.8)',borderWidth:1.5,pointRadius:0,tension:0.4,fill:true,backgroundColor:'rgba(255,149,0,0.05)'}]},
+    options:{responsive:true,maintainAspectRatio:false,animation:{duration:300},
+      plugins:{legend:{display:false}},
+      scales:{x:{grid:gridOpts(),ticks:{...tickOpts(),maxTicksLimit:8}},y:{grid:gridOpts(),ticks:tickOpts(),min:0,max:1}}}
+  });
+}
+
+function selectSimEngine(idx){
+  simEngineIdx = parseInt(idx);
+  resetSim();
+}
+
+function startSim() {
+  if(simRunning) return;
+  simRunning = true;
+  document.getElementById('btn-start').style.display='none';
+  document.getElementById('btn-stop').style.display='inline-block';
+  const speed = parseInt(document.getElementById('sim-speed-sel').value);
+  simInterval = setInterval(simStep, speed);
+}
+function stopSim() {
+  simRunning = false;
+  clearInterval(simInterval);
+  document.getElementById('btn-start').style.display='inline-block';
+  document.getElementById('btn-stop').style.display='none';
+}
+function resetSim() {
+  stopSim();
+  simCycle = 0;
+  simData = {actual:[],predicted:[],deg:[],temp:[],pressure:[],rpm:[]};
+  simLiveChart.data.labels=[];
+  simLiveChart.data.datasets.forEach(d=>d.data=[]);
+  simLiveChart.update();
+  simSensorChrt.data.labels=[];
+  simSensorChrt.data.datasets.forEach(d=>d.data=[]);
+  simSensorChrt.update();
+  simDegChrt.data.labels=[];
+  simDegChrt.data.datasets[0].data=[];
+  simDegChrt.update();
+  document.getElementById('sim-rul-big').textContent='—';
+  document.getElementById('sim-cycle-badge').textContent='Cycle 0';
+  document.getElementById('sim-status').textContent='● WAITING';
+  document.getElementById('sim-status').style.color='var(--text-dim)';
+  document.getElementById('sim-conf-pct').textContent='—%';
+  document.getElementById('sim-rmse').textContent='—';
+  document.getElementById('sim-mae').textContent='—';
+  document.getElementById('sim-r2').textContent='—';
+  document.getElementById('sim-gauge-bar').style.width='0%';
+  document.getElementById('sim-alert-area').innerHTML='';
+}
+
+function simStep() {
+  simCycle++;
+  const maxCycles = 120;
+  if(simCycle > maxCycles){ stopSim(); return; }
+
+  const t = simCycle/maxCycles;
+  const noise = (Math.random()-0.5);
+
+  // RUL decays non-linearly
+  const actualRul = Math.max(0, Math.round(SIM_MAX_RUL*(1-t) - 15*Math.pow(t,1.5) + noise*3));
+  const predRul = Math.max(0, actualRul + Math.round((Math.random()-0.5)*8 + 1));
+  const deg = Math.min(1, t*1.1 + 0.05*Math.pow(t,2) + Math.random()*0.02);
+
+  // Sensor noise with degradation trend
+  const temp = 100 + 300*t + (Math.random()-0.5)*10;
+  const pressure = 30 + 15*(1-t) + (Math.random()-0.5)*2;
+  const rpm = 8000 - 2000*t + (Math.random()-0.5)*200;
+
+  simData.actual.push(actualRul);
+  simData.predicted.push(predRul);
+  simData.deg.push(+deg.toFixed(3));
+  simData.temp.push(+temp.toFixed(1));
+  simData.pressure.push(+pressure.toFixed(1));
+  simData.rpm.push(+rpm.toFixed(0));
+
+  const WINDOW = 60;
+  const trim = arr => arr.slice(-WINDOW);
+  const labels = simData.actual.slice(-WINDOW).map((_,i,a)=>simCycle-(a.length-1-i));
+
+  simLiveChart.data.labels = labels;
+  simLiveChart.data.datasets[0].data = trim(simData.actual);
+  simLiveChart.data.datasets[1].data = trim(simData.predicted);
+  simLiveChart.update('none');
+
+  simSensorChrt.data.labels = labels;
+  simSensorChrt.data.datasets[0].data = trim(simData.temp);
+  simSensorChrt.data.datasets[1].data = trim(simData.pressure);
+  simSensorChrt.data.datasets[2].data = trim(simData.rpm).map(v=>v/100);
+  simSensorChrt.update('none');
+
+  simDegChrt.data.labels = labels;
+  simDegChrt.data.datasets[0].data = trim(simData.deg);
+  simDegChrt.update('none');
+
+  // Update KPIs
+  const color = actualRul<30?'var(--red)':actualRul<60?'var(--orange)':'var(--green)';
+  const status = actualRul<30?'● CRITICAL — MAINTENANCE NOW':actualRul<60?'● WARNING — PLAN SERVICE':'● OPERATING NORMALLY';
+  document.getElementById('sim-rul-big').textContent = actualRul;
+  document.getElementById('sim-rul-big').style.color = color;
+  document.getElementById('sim-cycle-badge').textContent = 'Cycle '+simCycle;
+  document.getElementById('sim-status').textContent = status;
+  document.getElementById('sim-status').style.color = color;
+  document.getElementById('sim-gauge-bar').style.width = (actualRul/SIM_MAX_RUL*100)+'%';
+  document.getElementById('sim-gauge-bar').style.background = color;
+
+  // Confidence
+  if(simCycle >= 10) {
+    const errs = simData.actual.map((a,i)=>Math.abs(a-simData.predicted[i]));
+    const rmse = Math.sqrt(errs.reduce((s,e)=>s+e*e,0)/errs.length);
+    const mae = errs.reduce((s,e)=>s+e,0)/errs.length;
+    const r2 = 1 - errs.reduce((s,e)=>s+e*e,0) / (simData.actual.reduce((s,v)=>s+Math.pow(v-simData.actual.reduce((a,b)=>a+b,0)/simData.actual.length,2),0)||1);
+    const acc = errs.filter(e=>e<=10).length/errs.length*100;
+    document.getElementById('sim-conf-pct').textContent = acc.toFixed(0)+'%';
+    document.getElementById('sim-conf-pct').style.color = acc>85?'var(--green)':acc>70?'var(--orange)':'var(--red)';
+    document.getElementById('sim-rmse').textContent = rmse.toFixed(2);
+    document.getElementById('sim-mae').textContent = mae.toFixed(2);
+    document.getElementById('sim-r2').textContent = Math.min(0.999,r2).toFixed(3);
+  }
+
+  // Alerts
+  let alertHtml = '';
+  if(actualRul < 30) alertHtml = `<div class="alert-banner danger"><span class="alert-icon">🚨</span>CRITICAL: RUL = ${actualRul} cycles. Schedule immediate maintenance for Engine #${simEngineIdx+1}!</div>`;
+  else if(actualRul < 60) alertHtml = `<div class="alert-banner warning"><span class="alert-icon">⚠️</span>WARNING: RUL = ${actualRul} cycles. Plan maintenance within ${Math.floor(actualRul/8)+1} days.</div>`;
+  document.getElementById('sim-alert-area').innerHTML = alertHtml;
+}
+
+// ══════════════════════════════════════════
+// SENSOR FEED PAGE
+// ══════════════════════════════════════════
+const SENSOR_DEFS = [
+  {key:'T2',name:'Total Temp Fan Inlet',unit:'°R',base:489,range:2},
+  {key:'T24',name:'Total Temp LPC Outlet',unit:'°R',base:642,range:5},
+  {key:'T30',name:'Total Temp HPC Outlet',unit:'°R',base:1590,range:15},
+  {key:'T50',name:'Total Temp LPT Outlet',unit:'°R',base:1400,range:12},
+  {key:'P2',name:'Pressure Fan Inlet',unit:'psia',base:14.6,range:0.3},
+  {key:'P15',name:'Total Pressure Bypass',unit:'psia',base:21.6,range:0.5},
+  {key:'P30',name:'Total Pressure HPC',unit:'psia',base:554,range:8},
+  {key:'Nf',name:'Physical Fan Speed',unit:'rpm',base:2388,range:30},
+  {key:'Nc',name:'Physical Core Speed',unit:'rpm',base:9046,range:50},
+  {key:'Ps30',name:'Static Pressure HPC',unit:'psia',base:47.5,range:1},
+  {key:'phi',name:'Ratio Fuel Flow',unit:'pps/psia',base:521,range:5},
+  {key:'NRf',name:'Corrected Fan Speed',unit:'rpm',base:2388,range:20},
+];
+
+let sensorInterval=null, sensorTs={labels:[]};
+const sensorHistory={};
+SENSOR_DEFS.forEach(s=>{sensorHistory[s.key]=[];});
+let sensorTsChart;
+
+function buildSensorCards(){
+  const el = document.getElementById('sensor-cards');
+  el.innerHTML = SENSOR_DEFS.map(s=>{
+    const v = (s.base + (Math.random()-0.5)*s.range).toFixed(1);
+    return `<div class="sensor-card" id="sc-${s.key}">
+      <div class="sensor-name">${s.key}</div>
+      <div class="sensor-val" id="sv-${s.key}">${v}<span class="sensor-unit"> ${s.unit}</span></div>
+      <div class="sensor-bar"><div class="sensor-fill" id="sf-${s.key}" style="width:50%"></div></div>
+    </div>`;
+  }).join('');
+}
+
+function buildSensorTsChart(){
+  sensorTsChart = new Chart(document.getElementById('sensorTsChart'), {
+    type:'line',
+    data:{labels:[],datasets:[
+      {label:'T50',data:[],borderColor:'rgba(255,59,92,0.8)',borderWidth:1.5,pointRadius:0,tension:0.4,fill:false},
+      {label:'Ps30',data:[],borderColor:'rgba(0,200,255,0.8)',borderWidth:1.5,pointRadius:0,tension:0.4,fill:false},
+      {label:'Nf/100',data:[],borderColor:'rgba(0,255,157,0.8)',borderWidth:1.5,pointRadius:0,tension:0.4,fill:false}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,animation:{duration:200},
+      plugins:{legend:{labels:{boxWidth:10,font:{size:9}}}},
+      scales:{x:{grid:gridOpts(),ticks:{...tickOpts(),maxTicksLimit:10}},y:{grid:gridOpts(),ticks:tickOpts()}}}
+  });
+}
+
+function buildHeatmap(){
+  const canvas = document.getElementById('heatmapCanvas');
+  const ctx = canvas.getContext('2d');
+  const keys = SENSOR_DEFS.slice(0,8).map(s=>s.key);
+  const n = keys.length;
+  const corrs = [];
+  for(let i=0;i<n;i++){ const row=[];
+    for(let j=0;j<n;j++) row.push(i===j?1:+(Math.random()*0.8-0.1).toFixed(2));
+    corrs.push(row);
+  }
+  const W=canvas.width, H=canvas.height;
+  const cellW=(W-60)/n, cellH=(H-40)/n;
+  ctx.fillStyle='transparent';
+  ctx.clearRect(0,0,W,H);
+  ctx.font='9px IBM Plex Mono';
+  ctx.fillStyle='rgba(200,224,244,0.5)';
+  keys.forEach((k,i)=>{ ctx.fillText(k,2,60+i*cellH+cellH/2); ctx.fillText(k,60+i*cellW+cellW/4,12); });
+  for(let i=0;i<n;i++) for(let j=0;j<n;j++){
+    const v=corrs[i][j];
+    const r=v>0?Math.round(0*v+0*(1-v)):Math.round(255*Math.abs(v));
+    const g=Math.round(200*Math.abs(v));
+    const b=v<0?Math.round(255*Math.abs(v)):Math.round(0*v);
+    ctx.fillStyle=`rgba(${v>0?0:r},${g},${v>0?Math.round(255*v):0},${0.3+0.6*Math.abs(v)})`;
+    ctx.fillRect(60+j*cellW,20+i*cellH,cellW-1,cellH-1);
+    ctx.fillStyle='rgba(200,224,244,0.7)';
+    ctx.font='8px IBM Plex Mono';
+    ctx.fillText(v.toFixed(1),60+j*cellW+2,20+i*cellH+cellH/1.5);
+  }
+}
+
+function startSensorFeed(){
+  document.getElementById('sensor-start').style.display='none';
+  document.getElementById('sensor-stop').style.display='inline-block';
+  let t=0;
+  sensorInterval = setInterval(()=>{
+    t++;
+    SENSOR_DEFS.forEach(s=>{
+      const v = +(s.base + (Math.random()-0.5)*s.range*2 + Math.sin(t/10)*s.range*0.5).toFixed(1);
+      const el = document.getElementById('sv-'+s.key);
+      if(el) el.childNodes[0].textContent = v;
+      const pct = 30+Math.random()*60;
+      const bar = document.getElementById('sf-'+s.key);
+      if(bar) { bar.style.width=pct+'%'; bar.style.background=pct>70?'var(--red)':pct>50?'var(--orange)':'var(--cyan)'; }
+      sensorHistory[s.key].push(v);
+      if(sensorHistory[s.key].length>50) sensorHistory[s.key].shift();
+    });
+    const labels = Array.from({length:sensorHistory['T50'].length},(_,i)=>i+1);
+    sensorTsChart.data.labels = labels;
+    sensorTsChart.data.datasets[0].data = sensorHistory['T50'];
+    sensorTsChart.data.datasets[1].data = sensorHistory['Ps30'];
+    sensorTsChart.data.datasets[2].data = sensorHistory['Nf'].map(v=>v/100);
+    sensorTsChart.update('none');
+  }, 600);
+}
+function stopSensorFeed(){
+  clearInterval(sensorInterval);
+  document.getElementById('sensor-start').style.display='inline-block';
+  document.getElementById('sensor-stop').style.display='none';
+}
+
+// ══════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════
+window.addEventListener('DOMContentLoaded', ()=>{
+  renderAlerts();
+  renderFleet();
+  updateGauge();
+  buildDegChart();
+  buildLossChart();
+  buildScatterChart();
+  buildErrorDistChart();
+  buildFeatureBars();
+  buildArchVisual();
+  buildComparisonCharts();
+  buildMaintenancePage();
+  buildSimCharts();
+  buildSensorCards();
+  buildSensorTsChart();
+  buildHeatmap();
+});
+</script>
+</body>
+</html>
